@@ -3,6 +3,7 @@ love.filesystem.setRequirePath(package.path)
 
 require("strict")
 
+produce_gif = false
 is_web = love.system.getOS()=="Web"
 -- should be unnecessary, playing it safe anyway for linters and such
 jit = pcall(require,"jit")
@@ -28,7 +29,7 @@ local tastool = nil
 pico8 = {
 	clip = nil,
 	fps = 30,
-	frametime = 1 / 30,
+	frametime = 1/30,
 	frames = 0,
 	resolution = __pico_resolution,
 	screen = nil,
@@ -492,7 +493,10 @@ vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) 
 	if argc >= 1 then
 		-- TODO: implement commandline options
 		while argpos <= argc do
-			if argv[argpos] == "-width" then
+			if argv[argpos] == "-producegif" then
+				--local n = argv[argpos + 1]
+				produce_gif = true
+			elseif argv[argpos] == "-width" then
 				--local n = argv[argpos + 1]
 				paramcount = 1
 			elseif argv[argpos] == "-height" then
@@ -947,7 +951,7 @@ function start_gif_recording()
 		log('failed to create gif directory')
 	elseif gif_recording==nil then
 		local err
-		gif_recording, err=gif.new("gifs/"..cartname..'-'..os.time()..'.gif')
+		gif_recording, err=gif.new("gifs/" .. 'out.gif')
 		if not gif_recording then
 			log('failed to start recording: '..err)
 		else
@@ -960,13 +964,15 @@ function start_gif_recording()
 	end
 end
 
-function stop_gif_recording()
+function stop_gif_recording(error_code)
+	error_code = error_code or 0
 	-- stop recording and save
 	if gif_recording~=nil then
 		gif_recording:close()
 		log('saved recording to '..gif_recording.filename)
 		gif_recording=nil
 		gif_canvas=nil
+		if produce_gif then love.event.quit(error_code) end
 	else
 		log('no active recording')
 	end
@@ -1156,6 +1162,7 @@ function love.run()
 		-- Call update and draw
 		local render = false
 		if dt > pico8.frametime then
+		-- if 2>1 then
 			if paused or not focus then -- luacheck: ignore 542
 				-- nop
 			else
@@ -1201,6 +1208,8 @@ function love.errorhandler(msg)
 			msg = msg.."\n\n failed to create backup"
 		end
 	end
+	-- Close on crash
+	love.event.quit(1)
 	return _default_errhand(msg)
 
 end

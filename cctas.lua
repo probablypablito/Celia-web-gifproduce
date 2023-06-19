@@ -14,7 +14,7 @@ function cctas:init()
 	--this seems hacky, but is actually how updation order behaves in vanilla
 	pico8.cart.begin_game()
 	pico8.cart._draw()
-
+	
 	if pico8.cart.__tas_load_level and pico8.cart.__tas_level_index then
 		self.cart_type = "tas"
 	elseif pico8.cart.lvl_id and pico8.cart.load_level then
@@ -24,32 +24,33 @@ function cctas:init()
 	else
 		error("couldn't find functions for level index and loading levels")
 	end
-
+	
 	self.cart_settings = pico8.cart.__tas_settings or {}
-
+	
 	self.level_time=0
 	self.inputs_active = false
-
+	
 	self.super.init(self)
-
+	
 
 	rawset(console.ENV,"find_player", self.find_player)
-
+	
 	self.prev_obj_count=0
 	self.modify_loading_jank=false
 	self.first_level=self:level_index()
 	self.loading_jank_offset=#pico8.cart.objects+1
-
+	
 	self.max_djump_overload=-1
-
+	
 	self.modify_rng_seeds=false
 	self.rng_seed_idx = -1
 	self:init_seed_objs()
-
+	
 	self.full_game_playback = false
-
+	
 	self:state_changed()
 	self:update_working_file()
+	if produce_gif then self:produce_gif() end
 end
 
 function cctas:perform_inject()
@@ -58,7 +59,7 @@ function cctas:perform_inject()
 			seed.inject(pico8)
 		end
 	end
-
+	
 	-- add tostring metamethod to objects, for use with the console
 	local init_object = pico8.cart.init_object
 	pico8.cart.init_object = function(...)
@@ -472,15 +473,16 @@ function cctas:player_rewind()
 	end
 end
 
-function cctas:start_gif_recording()
+function cctas:start_gif_recording(max_frames)
 	if start_gif_recording() then
 		start_gif_recording()
 		self:full_rewind()
 		local lvl_id = self:level_index()
 		self.seek = {
-			finish_condition = function() return self:level_index() ~= lvl_id end,
+			finish_condition = function() return self:level_index() ~= lvl_id or max_frames < self:frame_count() end,
 			on_finish = function()
-				stop_gif_recording()
+				local error_code = self:level_index() ~= lvl_id and 0 or 2
+				stop_gif_recording(error_code)
 				self:rewind()
 			end,
 			finish_on_interrupt = true
@@ -624,6 +626,7 @@ function cctas:load_input_str(str, i)
 		return self.super.load_input_str(self, str, i)
 	elseif not inputs then
 		print("invalid input file")
+		love.event.quit(3)
 		return false
 	end
 
@@ -731,6 +734,47 @@ function cctas:draw()
 	end
 
 end
+
+function cctas:produce_gif()
+	-- File naming: recordme_modname_level.tas
+	
+	local filename = ""
+	local level = ""
+	local cart = "celeste"
+	
+
+	local files = love.filesystem.getDirectoryItems("files")
+    for _, file in ipairs(files) do
+        if file:sub(1, 8) == "recordme" and file:sub(-4) == ".tas" then
+            filename = "files/" .. file
+			cart = file:match("_(.-)_")
+			level = file:match("(%d+)")
+			level = tonumber(level)
+			level = cart=="celeste" and level-1 or level
+
+			break
+        end
+    end
+
+	self:load_level(level, true)
+
+	local file = love.filesystem.newFile(filename)
+	local content = file:read()
+	-- Count number of frames; doesn't account for seed stuff but close enough
+	local max_frames = select(2, content:gsub(",", ""))
+
+	self:load_input_file(file)
+
+	self:start_gif_recording(max_frames)
+	-- while true do
+	-- 	if max_frames < self:frame_count() then
+	-- 		self:stop_gif_recording(2)
+	-- 		break
+	-- 	end
+	-- end
+		
+end
+
 
 return cctas
 
